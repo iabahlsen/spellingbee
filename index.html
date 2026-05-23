@@ -408,6 +408,14 @@
     </select>
   </div>
 
+  <!-- Voice selector -->
+  <div class="group-selector" style="margin-bottom:10px;">
+    <span>🎙️ Voz:</span>
+    <select id="voiceSelect" onchange="changeVoice()">
+      <option value="">Cargando voces…</option>
+    </select>
+  </div>
+
   <!-- MAIN CARD -->
   <div class="card" id="mainCard">
 
@@ -604,6 +612,7 @@
   let scoreErr       = 0;
   let answered       = false;
   let speechUnlocked = !isIOS; // en iOS el primer speak debe ser gesto manual
+  let selectedVoice  = null;
 
   // ═══════════════════════════════════════════════════════════
   //  URL STATE  (permite reanudar en otro dispositivo)
@@ -688,6 +697,50 @@
   // ═══════════════════════════════════════════════════════════
   //  SPEECH  (Web Speech API — no server needed)
   // ═══════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
+  //  VOICE SELECTION
+  // ═══════════════════════════════════════════════════════════
+  function loadVoices() {
+    const all = speechSynthesis.getVoices();
+    const english = all.filter(v => v.lang.startsWith('en'));
+    if (!english.length) return;
+
+    const sel = document.getElementById('voiceSelect');
+    sel.innerHTML = '';
+    english.forEach((v, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${v.name} (${v.lang})`;
+      sel.appendChild(opt);
+    });
+
+    // Restaurar preferencia guardada
+    const saved = localStorage.getItem('spellingBeeVoice');
+    let best = english.findIndex(v => v.name === saved);
+
+    if (best < 0) {
+      // Voces naturales en orden de preferencia
+      const preferred = ['Samantha','Google US English','Nicky','Karen','Moira',
+                         'Tessa','Victoria','Fiona','Google UK English Female'];
+      best = english.findIndex(v => preferred.some(n => v.name.includes(n)));
+      if (best < 0) best = 0;
+    }
+    sel.value = best;
+    selectedVoice = english[best];
+  }
+
+  function changeVoice() {
+    const sel = document.getElementById('voiceSelect');
+    const english = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+    selectedVoice = english[parseInt(sel.value, 10)] || null;
+    if (selectedVoice) localStorage.setItem('spellingBeeVoice', selectedVoice.name);
+    // Previsualizar la voz seleccionada
+    if (speechUnlocked && todayWords.length) speakWord(1);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  SPEECH  (Web Speech API — no server needed)
+  // ═══════════════════════════════════════════════════════════
   function speakWord(rate) {
     if (!window.speechSynthesis) {
       alert('Tu navegador no soporta texto a voz.\nPrueba con Chrome o Safari.');
@@ -703,7 +756,8 @@
     const utt  = new SpeechSynthesisUtterance(word);
     utt.lang  = 'en-US';
     utt.rate  = rate;
-    utt.pitch = 1.05;
+    utt.pitch = 0.95; // más suave que el valor por defecto
+    if (selectedVoice) utt.voice = selectedVoice;
 
     const btn = document.getElementById('btnListen');
     btn.classList.add('speaking');
@@ -867,6 +921,11 @@
   }
 
   // ─── START ───
+  // Cargar voces (async en algunos navegadores)
+  if (typeof speechSynthesis !== 'undefined') {
+    loadVoices();
+    speechSynthesis.onvoiceschanged = loadVoices;
+  }
   init(readURL());
   </script>
 </body>
